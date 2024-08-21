@@ -22,10 +22,7 @@ tags:
 
 ## Question et à faire
 
-Remettre cette image au bon endroit :
-![[Pasted image 20240418201637.png|Pasted image 20240418201637.png]]
-Voir -> Comment est gérer la base -> Dans un container ?
-Voir comment Jelastic est configuré et comment il reprend son image
+- Voir la fin du schéma que je ne comprends pas
 
 ---
 
@@ -79,8 +76,9 @@ Les couches (layers) sont associées aux images Docker, pas aux conteneurs. La s
 
 ![[Pasted image 20240418172924.png|Pasted image 20240418172924.png]]
 
-## Automatisation avec docker-compose
-[Docker compose](https://github.com/docker/compose) est un outil pour lancer un ou plusieurs containers, définis par un fichier nommé `docker-compose.yml` à la racine de votre projet, avec une seule ligne de commande.
+## Orchestration de containers
+### Docker-compose
+[Docker compose](https://github.com/docker/compose) est un outil simple d'orchestration de containers pour lancer un ou plusieurs containers, définis par un fichier nommé `docker-compose.yml` à la racine de votre projet, avec une seule ligne de commande.
 Avec ce fichier, on peut monter tous les containers dont on a besoin pour notre application avec une simple ligne de commande.
 
 Exemple :
@@ -155,6 +153,38 @@ A noter que toutes les machines d'un même docker-compose font partie du même r
 
 Faire le docker compose est équivalent à faire plusieurs docker run avec tous les paramètres comme le port, etc.
 
+#### Docker build
+Dans un fichier `docker-compose.yml`, la directive `build` est utilisée pour indiquer à Docker Compose de construire une image Docker à partir d'un Dockerfile local ou à partir d'un répertoire local contenant le contexte de construction. Cette directive est utilisée pour construire des images personnalisées ou des images spécifiques à votre environnement, par opposition à l'utilisation d'images pré-construites provenant de Docker Hub ou d'un autre registre.
+
+Exemple :
+```yaml
+version: '3'
+services:   
+	web:     build: ./chemin/vers/votre/Dockerfile
+	ports:   - "8080:80"
+```
+
+### Outils avancés (Kubernetes, Rancher, Swarm)
+![[kubernet.png|kubernet.png]]
+
+Permet de mettre des règles sur des containers permettant par exemple de démarrer plusieurs containers selon la charge, etc. 
+
+Il existe plusieurs orchestrateurs comme kubernetes, rancher ou celui de docker (Swarm).
+
+Les masters et les nodes sont des serveurs physiques différents. Par exemple kubernetes a besoin de 2 masters, etc. Kubernetes va choisir s'il doit déployer sur un nouveau node ou sur le même, il choisi tout seul.
+
+L'orchestrateur fait aussi d'autres choses comme le déploiement des mises à jour.
+
+#### Différence avec docker compose
+**Docker Compose** est un outil **simple et léger** conçu pour gérer des applications multi-conteneurs sur un seul hôte. Il est facile à configurer et à utiliser, ce qui le rend idéal pour le développement local et les tests. Docker Compose utilise un fichier de configuration YAML pour définir les conteneurs à exécuter, les réseaux et les volumes à créer, ainsi que les dépendances entre les conteneurs.
+
+**Kubernetes**, en revanche, est un orchestrateur de conteneurs de niveau production conçu pour gérer des **applications distribuées à grande échelle** sur plusieurs hôtes. Il offre un ensemble plus riche de fonctionnalités que Docker Compose, notamment :
+
+- **Découverte de service et équilibrage de charge** : Kubernetes permet aux conteneurs de se découvrir et de se connecter les uns aux autres, même si leurs adresses IP changent. Il peut également équilibrer la charge du trafic entre les instances d'une application.
+- **Auto-guérison** : Kubernetes peut automatiquement redémarrer les conteneurs défaillants ou mettre à l'échelle les applications en fonction de la demande.
+- **Gestion des ressources** : Kubernetes peut gérer les ressources CPU, mémoire et stockage pour les conteneurs.
+- **Déploiements progressifs** : Kubernetes peut déployer de nouvelles versions d'applications de manière progressive et sûre.
+
 ## Volumes
 Comme on l'a vu avant, les containers sont isolés du système hôte. Ils ont un accès en lecture seule pour exister mais c'est tout. La problématique, c'est que dans beaucoup de cas, on va avoir besoin d'utiliser des fichiers qui ne sont pas dans un container.
 
@@ -175,7 +205,9 @@ docker run -v ${PWD}:/usr/local/apache2/htdocs/ httpd:2.4
 _${PWD}_ permet de récupérer le chemin absolu du répertoire de travail
 
 ## Ports
-De la même façon que le reste, les ports réseaux à l'intérieur d'un container sont isolés du reste du système. C'est une notion importante car, on va devoir faire de la redirection de port. Lorsqu'un service expose un port à l'intérieur du container, il n'est, par conséquent, pas accessible depuis l'extérieur par défaut.
+De la même façon que le reste, les ports réseaux à l'intérieur d'un container sont isolés du reste du système. C'est une notion importante car, on va devoir faire de la redirection de port. 
+
+Lorsqu'un service expose un port à l'intérieur du container, il n'est, par conséquent, pas accessible depuis l'**extérieur** par défaut. Il faut donc définir le port lié de notre propre machine :
 
 ![[Pasted image 20240418184214.png|Pasted image 20240418184214.png]]
 
@@ -183,9 +215,51 @@ De la même façon que le reste, les ports réseaux à l'intérieur d'un contain
 
 Il existe également un autre aspect important avec les ports, c'est la notion d'[EXPOSE](https://docs.docker.com/engine/reference/builder/#expose).
 
-`EXPOSE` va permettre d'ouvrir un port uniquement pour les autres containers. En pratique, on va s'en servir pour faire interagir des containers entre eux. Typiquement, un container MySQL n'aura pas besoin d'être accessible via l'host, on va donc exposer son port par défaut `3306` aux autres container pour qu'ils y aient accès.
+`EXPOSE` va permettre d'**ouvrir un port uniquement pour les autres containers**. En pratique, on va s'en servir pour faire interagir des containers entre eux. Typiquement, un container MySQL n'aura pas besoin d'être accessible via l'host, on va donc exposer son port par défaut `3306` aux autres container pour qu'ils y aient accès.
 
 Docker utilise aussi cette notion lors de l'utilisation de l'opérateur `--link` que nous allons détailler.
+
+## Réseaux
+### Bridge
+Sur Docker il existe un network par défaut. Son nom est **bridge** et si vous ne changez pas la configuration, tous les containers seront associés à ce réseau. Qu'est-ce que cela change pour nous ? Si vous n'avez pas besoin d'isoler vos containers entre eux, ils pourront tous communiquer ensemble sur ce réseau sans avoir à utiliser **les links** par exemple.
+
+Ce sont tous les containers d'un projet (un projet est un groupe de container lancés via le même compose up ou dans le même dossier) qui peuvent communiquer entre eux.
+
+De plus certains containers communiquent entre eux sans préciser les ports car par défaut, dans l'image, certains ports sont exposés entre les machines (par exemple le 3306 de mariadb).
+
+### Utiliser le même réseau dans des projets différents
+
+J'ai repris deux docker-compose mais séparé mariadb et phpmyadmin dans des docker-compose différents (un docker compose est dans un un sous-dossier src).
+
+En lançant mes deux docker compose up, j'ai maintenant mes containers lancés dans deux projets différents :
+
+![[Pasted image 20240503100042.png|Pasted image 20240503100042.png]]
+
+Bien qu'ils utilisent le driver bridge, les deux projets sont dans des réseaux différents.
+
+**C'est donc tous les containers dans un même projet (issus du même docker compose ou dans le même dossier) qui sont dans un même réseau**.
+
+Dans mon cas, nous avons donc deux réseaux :
+
+  ![[Pasted image 20240503103610.png|Pasted image 20240503103610.png]]
+
+  ![[Pasted image 20240503103640.png|Pasted image 20240503103640.png]]
+ 
+Je n'arrive donc pas à me connecter à mon mariadb :
+
+![[Pasted image 20240503103708.png|Pasted image 20240503103708.png]]
+
+Pour qu'ils puissent communiquer, j'ai ajouter le réseau dans les docker-compose :
+
+![[Pasted image 20240503103723.png|Pasted image 20240503103723.png]]
+![[Pasted image 20240503103736.png|Pasted image 20240503103736.png]]
+
+En faisant ainsi, j'ai bien un seul et même réseau :
+
+ ![[Pasted image 20240503103759.png|Pasted image 20240503103759.png]] 
+
+Et la connexion fonctionne bien :
+![[Pasted image 20240503103838.png|Pasted image 20240503103838.png]]
 
 ## Les links
 
@@ -197,16 +271,13 @@ Docker va également modifier le fichier `/etc/hosts` pour nous. Ainsi, on pou
 
 ![[Pasted image 20240418184531.png|Pasted image 20240418184531.png]]
 
-## Orchestration de containers
-![[kubernet.png|kubernet.png]]
+## Gestion d'environnement Docker - Portainer
+Portainer est une interface utilisateur graphique open source pour gérer des environnements Docker. Il permet de visualiser, de gérer et de déployer des conteneurs Docker, des réseaux et des volumes, ainsi que de surveiller les ressources système et les performances des conteneurs.
 
-Permet de mettre des règles sur des containers permettant par exemple de démarrer plusieurs containers selon la charge, etc. 
+En résumé, il est possible d'installer docker sur plusieurs serveurs et gérer ces serveurs ainsi que les dockers installés directement depuis portainer.
 
-Il existe plusieurs orchestrateurs comme kubernetes, rancher ou celui de docker (Swarm).
-
-Les masters et les nodes sont des serveurs physiques différents. Par exemple kubernetes a besoin de 2 masters, etc. Kubernetes va choisir s'il doit déployer sur un nouveau node ou sur le même, il choisi tout seul.
-
-L'orchestrateur fait aussi d'autres choses comme le déploiement des mises à jour.
+## Exemple architecture logiciel
+![[Pasted image 20240418201637.png|Pasted image 20240418201637.png]]
 
 ## Commandes docker simple
 
@@ -265,7 +336,19 @@ docker container ls -a
 docker ps -a
 ```
 
+### Liste des images (tous)
+
+```bash
+docker image ls
+```
+
 - Liste tous les conteneurs, y compris ceux qui ont été arrêtés
+
+### Liste des réseaux (tous)
+
+```bash
+docker network ls
+```
 
 ### Démarrer un conteneur
 
@@ -301,6 +384,21 @@ docker exec -ti myHTTPD bash
 docker exec -ti <CONTAINER_ID> bash
 ```
 
+### Effacer le cache, les images, containers et volumes qui ne sont pas utilisés
+
+```bash
+## Efface uniquement le cache et les images non utlisées
+docker prune
+
+## Efface le cache, les images, les containers et les volumes non utlisées
+docker prune -a
+```
+
+## DevOps - Infomaniak Jelastic
+![[Pasted image 20240524094718.png|Pasted image 20240524094718.png]]
+
+Voir [[schéma devops docker|schéma devops docker]]
+
 ## Sources
 
 ### Cours EMT par Christophe Chevalier
@@ -313,3 +411,4 @@ gitlab.indc.dev
 ### Tuto en ligne :
 - https://guillaumebriday.fr/comprendre-et-mettre-en-place-docker
 - https://guillaumebriday.fr/docker-les-reseaux-personnalises
+- https://devopssec.fr/article/fonctionnement-manipulation-reseau-docker
